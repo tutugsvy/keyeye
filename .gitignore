@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+vault-contract/cache/
+vault-contract/out/
+vault-contract/broadcast/
+*.log
+.DS_Store
