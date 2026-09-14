@@ -8,9 +8,9 @@ const MODES = [
   { id: '90d', name: '90 days', detail: 'Best rate', apy: { USDG: 6.2, ETH: 1.75 } },
 ]
 
-const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS || ''
+const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS || '0x67b953ac1d98f9dfe17ab1854bd54b180f95ae07'
 const PONS_CHART_URL = import.meta.env.VITE_PONS_CHART_URL || 'https://chart.wallstreetexe.site/pons-chart'
-const BUY_URL = import.meta.env.VITE_BUY_URL || ''
+const BUY_URL = import.meta.env.VITE_BUY_URL || 'https://dexscreener.com/robinhood/0xPairAddress'
 const USDG_ADDRESS = import.meta.env.VITE_USDG_ADDRESS || '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168'
 const VAULT_ADDRESS = import.meta.env.VITE_VAULT_ADDRESS || '0xe70BdAd94756059B7A012b72fFAA8344Be40C057'
 const ROBINHOOD_RPC = import.meta.env.VITE_ROBINHOOD_RPC || 'https://rpc.mainnet.chain.robinhood.com'
