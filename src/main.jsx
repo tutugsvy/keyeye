@@ -3,32 +3,32 @@ import { createRoot } from 'react-dom/client'
 import './styles.css'
 
 const MODES = [
-  { id: 'flex', name: 'Flexible', detail: 'Withdraw anytime', apy: { USDG: 2.7, ETH: 1.2 } },
-  { id: '7d', name: '7 days', detail: 'Short lock', apy: { USDG: 3, ETH: 1.4 } },
-  { id: '90d', name: '90 days', detail: 'Best rate', apy: { USDG: 6.2, ETH: 1.75 } },
+  { id: 'flex', name: 'Flexible', detail: 'Withdraw anytime', apy: { USDC: 2.7 } },
+  { id: '7d', name: '7 days', detail: 'Short lock', apy: { USDC: 3 } },
+  { id: '90d', name: '90 days', detail: 'Best rate', apy: { USDC: 6.2 } },
 ]
 
-const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS || '0x67b953ac1d98f9dfe17ab1854bd54b180f95ae07'
-const PONS_CHART_URL = import.meta.env.VITE_PONS_CHART_URL || 'https://vault.ownvault.online/pons-chart'
-const BUY_URL = import.meta.env.VITE_BUY_URL || 'https://dexscreener.com/robinhood/0xPairAddress'
-const USDG_ADDRESS = import.meta.env.VITE_USDG_ADDRESS || '0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168'
-const VAULT_ADDRESS = import.meta.env.VITE_VAULT_ADDRESS || '0xe70BdAd94756059B7A012b72fFAA8344Be40C057'
-const ROBINHOOD_RPC = import.meta.env.VITE_ROBINHOOD_RPC || 'https://rpc.mainnet.chain.robinhood.com'
-const ROBINHOOD_CHAIN_ID = '0x1237'
-const ROBINHOOD_CHAIN = {
-  chainId: ROBINHOOD_CHAIN_ID,
-  chainName: 'Robinhood Chain',
-  nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-  rpcUrls: [ROBINHOOD_RPC],
-  blockExplorerUrls: ['https://explorer.mainnet.chain.robinhood.com'],
+const TOKEN_ADDRESS = import.meta.env.VITE_TOKEN_ADDRESS || ''
+const PONS_CHART_URL = import.meta.env.VITE_PONS_CHART_URL || 'https://chart.wallstreetexe.site/pons-chart'
+const ARGUS_TOKEN_URL = import.meta.env.VITE_ARGUS_TOKEN_URL || `/api/argus/${TOKEN_ADDRESS}`
+const BUY_URL = import.meta.env.VITE_BUY_URL || ''
+const USDC_ADDRESS = '0x0000000000000000000000000000000000000000'
+const VAULT_ADDRESS = import.meta.env.VITE_VAULT_ADDRESS || ''
+const ARC_RPC = import.meta.env.VITE_ARC_RPC || 'https://rpc.arc-scan.org'
+const ARC_CHAIN_ID = '0x13b2'
+const ARC_CHAIN = {
+  chainId: ARC_CHAIN_ID,
+  chainName: 'Arc Network',
+  nativeCurrency: { name: 'USD Coin', symbol: 'USDC', decimals: 18 },
+  rpcUrls: [ARC_RPC],
+  blockExplorerUrls: ['https://www.arcexplorer.org'],
 }
 const TOKEN_SUPPLY = 1_000_000_000
 const ERC20_BALANCE_OF = '0x70a08231'
 const ERC20_DECIMALS = '0x313ce567'
 const ERC20_APPROVE = '0x095ea7b3'
 const ERC20_ALLOWANCE = '0xdd62ed3e'
-const VAULT_DEPOSIT_USDG = '0xe68c848b'
-const VAULT_DEPOSIT_ETH = '0x7ef275d0'
+const VAULT_DEPOSIT_USDC_NATIVE = '0x7ef275d0'
 const VAULT_PENDING_REWARD = '0x12f7086c'
 const VAULT_CLAIM_REWARD = '0xae169a50'
 const VAULT_WITHDRAW = '0x2e1a7d4d'
@@ -74,39 +74,29 @@ const formatTokenBalance = (raw, decimals = 18) => {
   return value.toLocaleString(undefined, { maximumFractionDigits: 18 })
 }
 
-async function ensureRobinhoodNetwork() {
+async function ensureArcNetwork() {
   if (!window.ethereum) throw new Error('Wallet provider unavailable')
   const current = await window.ethereum.request({ method: 'eth_chainId' })
-  if (String(current).toLowerCase() === ROBINHOOD_CHAIN_ID) return
+  if (String(current).toLowerCase() === ARC_CHAIN_ID) return
   try {
-    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ROBINHOOD_CHAIN_ID }] })
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: ARC_CHAIN_ID }] })
   } catch (error) {
-    if (error?.code !== 4902) throw new Error('Switch wallet to Robinhood Chain before continuing')
-    await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [ROBINHOOD_CHAIN] })
+    if (error?.code !== 4902) throw new Error('Switch wallet to Arc Network before continuing')
+    await window.ethereum.request({ method: 'wallet_addEthereumChain', params: [ARC_CHAIN] })
   }
   const verified = await window.ethereum.request({ method: 'eth_chainId' })
-  if (String(verified).toLowerCase() !== ROBINHOOD_CHAIN_ID) throw new Error('Wallet is not connected to Robinhood Chain')
+  if (String(verified).toLowerCase() !== ARC_CHAIN_ID) throw new Error('Wallet is not connected to Arc Network')
 }
 
 async function readWalletBalances(requestAccounts = true) {
   if (!window.ethereum) throw new Error('Wallet provider unavailable')
-  await ensureRobinhoodNetwork()
+  await ensureArcNetwork()
   const accounts = await window.ethereum.request({ method: requestAccounts ? 'eth_requestAccounts' : 'eth_accounts' })
   const address = accounts?.[0]
   if (!address) throw new Error('No wallet account selected')
   const ethHex = await window.ethereum.request({ method: 'eth_getBalance', params: [address, 'latest'] })
-  let usdg = null
-  let usdgDecimals = 18
-  if (USDG_ADDRESS) {
-    const data = ERC20_BALANCE_OF + address.slice(2).padStart(64, '0')
-    const result = await window.ethereum.request({ method: 'eth_call', params: [{ to: USDG_ADDRESS, data }, 'latest'] })
-    try {
-      const decimalResult = await window.ethereum.request({ method: 'eth_call', params: [{ to: USDG_ADDRESS, data: ERC20_DECIMALS }, 'latest'] })
-      usdgDecimals = Number(BigInt(decimalResult))
-    } catch {}
-    usdg = formatTokenBalance(BigInt(result), usdgDecimals)
-  }
-  return { address, eth: formatTokenBalance(BigInt(ethHex), 18), usdg, usdgDecimals }
+  const usdc = formatTokenBalance(BigInt(ethHex), 18)
+  return { address, eth: usdc, usdc, usdg: usdc, usdgDecimals: 18 }
 }
 
 function PriceChart({ points, backendCandles, chartState }) {
@@ -182,7 +172,7 @@ function PriceChart({ points, backendCandles, chartState }) {
 
 function App() {
   const [connected, setConnected] = useState(false)
-  const [asset, setAsset] = useState('USDG')
+  const [asset, setAsset] = useState('USDC')
   const [mode, setMode] = useState('90d')
   const [amount, setAmount] = useState('')
   const [chart, setChart] = useState(null)
@@ -193,8 +183,8 @@ function App() {
   const [txPending, setTxPending] = useState(false)
   const [position, setPosition] = useState(null)
   const [positionLoading, setPositionLoading] = useState(false)
-  const [contractRates, setContractRates] = useState({ USDG: null, ETH: null })
-  const [vaultBalances, setVaultBalances] = useState({ USDG: null, ETH: null })
+  const [contractRates, setContractRates] = useState({ USDC: null })
+  const [vaultBalances, setVaultBalances] = useState({ USDC: null })
   const [movement, setMovement] = useState([])
   const [dashboardOpen, setDashboardOpen] = useState(false)
   const positionRequest = useRef(0)
@@ -219,7 +209,7 @@ function App() {
       if (!window.ethereum) return
       try {
         const chainId = await window.ethereum.request({ method: 'eth_chainId' })
-        if (String(chainId).toLowerCase() !== ROBINHOOD_CHAIN_ID) return
+        if (String(chainId).toLowerCase() !== ARC_CHAIN_ID) return
         const accounts = await window.ethereum.request({ method: 'eth_accounts' })
         if (!accounts?.[0] || cancelled) return
         const balances = await readWalletBalances(false)
@@ -243,14 +233,14 @@ function App() {
     if (!TOKEN_ADDRESS) return undefined
     let cancelled = false
     const loadChart = () => {
-      const url = new URL(PONS_CHART_URL)
-      url.searchParams.set('address', TOKEN_ADDRESS)
-      url.searchParams.set('range', '5m')
-      fetch(url).then((response) => {
-        if (!response.ok) throw new Error(`Pons HTTP ${response.status}`)
+      fetch(ARGUS_TOKEN_URL).then((response) => {
+        if (!response.ok) throw new Error(`Argus HTTP ${response.status}`)
         return response.json()
       }).then((data) => {
-        if (!cancelled) { setChart(data); setChartState(Array.isArray(data?.points) && data.points.length ? 'live' : 'unavailable') }
+        const values = Array.isArray(data?.sparkline) ? data.sparkline : []
+        const now = Math.floor(Date.now() / 1000)
+        const points = values.map((price, index) => ({ t: now - (values.length - index) * 300, price, volumeQuote: 0 }))
+        if (!cancelled) { setChart({ ...data, points }); setChartState(points.length ? 'live' : 'unavailable') }
       }).catch(() => { if (!cancelled) setChartState('unavailable') })
     }
     loadChart()
@@ -262,9 +252,9 @@ function App() {
     if (!connected || !window.ethereum) return undefined
     const readRates = async () => {
       try {
-        const [usdgRaw, ethRaw] = await Promise.all([USDG_ADDRESS, '0x0000000000000000000000000000000000000000'].map((token) => window.ethereum.request({ method: 'eth_call', params: [{ to: VAULT_ADDRESS, data: encodeCall(VAULT_ANNUAL_BPS, [encodeAddress(token)]) }, 'latest'] })))
-        setContractRates({ USDG: Number(BigInt(usdgRaw)) / 100, ETH: Number(BigInt(ethRaw)) / 100 })
-      } catch { setContractRates({ USDG: null, ETH: null }) }
+        const raw = await window.ethereum.request({ method: 'eth_call', params: [{ to: VAULT_ADDRESS, data: encodeCall(VAULT_ANNUAL_BPS, [encodeAddress(USDC_ADDRESS)]) }, 'latest'] })
+        setContractRates({ USDC: Number(BigInt(raw)) / 100 })
+      } catch { setContractRates({ USDC: null }) }
     }
     readRates()
   }, [connected])
@@ -272,8 +262,8 @@ function App() {
   const selected = MODES.find((item) => item.id === mode)
   const value = Number(amount) || 0
   const notify = (message) => { setToast(message); setTimeout(() => setToast(''), 2400) }
-  const displayApy = MODES.find((item) => item.id === mode)?.apy[asset] ?? 0
-  const displayYearly = value * displayApy / 100
+  const displayApy = MODES.find((item) => item.id === mode)?.apy[asset] ?? null
+  const displayYearly = displayApy == null ? 0 : value * displayApy / 100
 
   const connectWallet = async () => {
     try {
@@ -310,7 +300,7 @@ function App() {
   const refreshPosition = async (address = walletBalances?.address) => {
     if (!address || !window.ethereum) return
     const requestId = ++positionRequest.current
-    const assetAddress = asset === 'USDG' ? USDG_ADDRESS : '0x0000000000000000000000000000000000000000'
+    const assetAddress = asset === 'USDC' ? USDC_ADDRESS : '0x0000000000000000000000000000000000000000'
     try {
       const idsData = encodeCall(VAULT_GET_POSITION_IDS, [encodeAddress(address)])
       const idsRaw = await window.ethereum.request({ method: 'eth_call', params: [{ to: VAULT_ADDRESS, data: idsData }, 'latest'] })
@@ -335,7 +325,7 @@ function App() {
       const pendingData = encodeCall(VAULT_PENDING_REWARD, [encodeUint(selectedPosition.positionId)])
       const pending = await window.ethereum.request({ method: 'eth_call', params: [{ to: VAULT_ADDRESS, data: pendingData }, 'latest'] })
       if (requestId !== positionRequest.current) return
-      setPosition({ ...selectedPosition, pending: formatTokenBalance(BigInt(pending), asset === 'USDG' ? (walletBalances?.usdgDecimals ?? 6) : 18), principal: formatTokenBalance(selectedPosition.principal, asset === 'USDG' ? (walletBalances?.usdgDecimals ?? 6) : 18), hasPosition: true, positionCount: candidates.length })
+      setPosition({ ...selectedPosition, pending: formatTokenBalance(BigInt(pending), asset === 'USDC' ? (walletBalances?.usdgDecimals ?? 6) : 18), principal: formatTokenBalance(selectedPosition.principal, asset === 'USDC' ? (walletBalances?.usdgDecimals ?? 6) : 18), hasPosition: true, positionCount: candidates.length })
     } catch { if (requestId === positionRequest.current) setPosition(null) }
   }
 
@@ -350,15 +340,14 @@ function App() {
     if (!connected || !window.ethereum) return undefined
     const readVaultData = async () => {
       try {
-        const [usdgRaw, ethRaw, latestBlock] = await Promise.all([
-          window.ethereum.request({ method: 'eth_call', params: [{ to: USDG_ADDRESS, data: encodeCall(ERC20_BALANCE_OF, [encodeAddress(VAULT_ADDRESS)]) }, 'latest'] }),
+        const [usdcRaw, latestBlock] = await Promise.all([
           window.ethereum.request({ method: 'eth_getBalance', params: [VAULT_ADDRESS, 'latest'] }),
           window.ethereum.request({ method: 'eth_blockNumber', params: [] }),
         ])
-        setVaultBalances({ USDG: formatTokenBalance(BigInt(usdgRaw), walletBalances?.usdgDecimals ?? 6), ETH: formatTokenBalance(BigInt(ethRaw), 18) })
+        setVaultBalances({ USDC: formatTokenBalance(BigInt(usdcRaw), 18) })
         const fromBlock = `0x${Math.max(0, Number(BigInt(latestBlock)) - 100000).toString(16)}`
         const [deposits, withdrawals] = await Promise.all([VAULT_DEPOSITED_TOPIC, VAULT_WITHDRAWN_TOPIC].map((topic) => window.ethereum.request({ method: 'eth_getLogs', params: [{ address: VAULT_ADDRESS, topics: [topic], fromBlock, toBlock: 'latest' }] })))
-        const rows = [...(deposits || []).filter((log) => !walletBalances?.address || log.topics?.[2]?.toLowerCase() === walletBalances.address.toLowerCase()).map((log) => ({ type: 'DEPOSIT', hash: log.transactionHash, block: Number(BigInt(log.blockNumber)), time: log.blockTimestamp, asset: log.topics?.[3]?.toLowerCase() === USDG_ADDRESS.toLowerCase() ? 'USDG' : 'ETH', positionId: Number(BigInt(log.topics?.[1] || '0x0')), amount: decodeLogWord(log.data, 0) })), ...(withdrawals || []).filter((log) => !walletBalances?.address || log.topics?.[2]?.toLowerCase() === walletBalances.address.toLowerCase()).map((log) => ({ type: 'WITHDRAW', hash: log.transactionHash, block: Number(BigInt(log.blockNumber)), time: log.blockTimestamp, asset: log.topics?.[3]?.toLowerCase() === USDG_ADDRESS.toLowerCase() ? 'USDG' : 'ETH', positionId: Number(BigInt(log.topics?.[1] || '0x0')), amount: decodeLogWord(log.data, 0) }))].sort((a, b) => b.block - a.block).slice(0, 8)
+        const rows = [...(deposits || []).filter((log) => !walletBalances?.address || log.topics?.[2]?.toLowerCase() === walletBalances.address.toLowerCase()).map((log) => ({ type: 'DEPOSIT', hash: log.transactionHash, block: Number(BigInt(log.blockNumber)), time: log.blockTimestamp, asset: 'USDC', positionId: Number(BigInt(log.topics?.[1] || '0x0')), amount: decodeLogWord(log.data, 0) })), ...(withdrawals || []).filter((log) => !walletBalances?.address || log.topics?.[2]?.toLowerCase() === walletBalances.address.toLowerCase()).map((log) => ({ type: 'WITHDRAW', hash: log.transactionHash, block: Number(BigInt(log.blockNumber)), time: log.blockTimestamp, asset: 'USDC', positionId: Number(BigInt(log.topics?.[1] || '0x0')), amount: decodeLogWord(log.data, 0) }))].sort((a, b) => b.block - a.block).slice(0, 8)
         setMovement(rows)
       } catch { setMovement([]) }
     }
@@ -381,31 +370,13 @@ function App() {
     if (!VAULT_ADDRESS) return notify('Vault is not configured')
     setTxPending(true)
     try {
-      await ensureRobinhoodNetwork()
+      await ensureArcNetwork()
       const lockDuration = mode === '90d' ? 90 * 86400 : mode === '7d' ? 7 * 86400 : 0
-      const token = asset === 'USDG' ? USDG_ADDRESS : '0x0000000000000000000000000000000000000000'
-      if (asset === 'USDG') {
-        const rawAmount = parseUnits(amount, walletBalances.usdgDecimals ?? 18)
-        const allowanceData = encodeCall(ERC20_ALLOWANCE, [encodeAddress(walletBalances.address), encodeAddress(VAULT_ADDRESS)])
-        const allowanceRaw = await window.ethereum.request({ method: 'eth_call', params: [{ to: USDG_ADDRESS, data: allowanceData }, 'latest'] })
-        const allowance = BigInt(allowanceRaw)
-        if (allowance < rawAmount) {
-          const approvalData = encodeCall(ERC20_APPROVE, [encodeAddress(VAULT_ADDRESS), encodeUint(rawAmount)])
-          const approvalHash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: USDG_ADDRESS, data: approvalData }] })
-          notify('USDG approval required · waiting for confirmation')
-          await waitForReceipt(approvalHash)
-        }
-        const depositData = encodeCall(VAULT_DEPOSIT_USDG, [encodeUint(rawAmount), encodeUint(lockDuration)])
-        const depositHash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: VAULT_ADDRESS, data: depositData }] })
-        notify('USDG deposit submitted · waiting for confirmation')
-        await waitForReceipt(depositHash)
-      } else {
-        const rawAmount = parseUnits(amount, 18)
-        const depositData = encodeCall(VAULT_DEPOSIT_ETH, [encodeUint(lockDuration)])
-        const depositHash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: VAULT_ADDRESS, data: depositData, value: `0x${rawAmount.toString(16)}` }] })
-        notify('ETH deposit submitted · waiting for confirmation')
-        await waitForReceipt(depositHash)
-      }
+      const rawAmount = parseUnits(amount, 18)
+      const depositData = encodeCall(VAULT_DEPOSIT_USDC_NATIVE, [encodeUint(lockDuration)])
+      const depositHash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: VAULT_ADDRESS, data: depositData, value: `0x${rawAmount.toString(16)}` }] })
+      notify('USDC deposit submitted · waiting for confirmation')
+      await waitForReceipt(depositHash)
       const balances = await readWalletBalances()
       setWalletBalances(balances)
       await refreshPosition(balances.address)
@@ -419,7 +390,7 @@ function App() {
     if (!connected || !walletBalances?.address) return notify('Connect wallet before claiming')
     setTxPending(true)
     try {
-      await ensureRobinhoodNetwork()
+      await ensureArcNetwork()
       const data = encodeCall(VAULT_CLAIM_REWARD, [encodeUint(position?.positionId ?? 0)])
       const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: VAULT_ADDRESS, data }] })
       notify('Claim submitted · waiting for confirmation')
@@ -433,7 +404,7 @@ function App() {
     if (!connected || !walletBalances?.address) return notify('Connect wallet before withdrawing')
     setTxPending(true)
     try {
-      await ensureRobinhoodNetwork()
+      await ensureArcNetwork()
       const data = encodeCall(VAULT_WITHDRAW, [encodeUint(position?.positionId ?? 0)])
       const hash = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: walletBalances.address, to: VAULT_ADDRESS, data }] })
       notify('Withdraw submitted · waiting for confirmation')
@@ -444,17 +415,15 @@ function App() {
   }
 
   const points = Array.isArray(chart?.points) ? chart.points : []
-  const livePrice = points.length && Number.isFinite(Number(points[points.length - 1].price)) && Number.isFinite(Number(chart?.quoteUsd))
-    ? Number(points[points.length - 1].price) * Number(chart.quoteUsd)
-    : null
-  const marketCap = livePrice == null ? null : livePrice * TOKEN_SUPPLY
+  const livePrice = chart && Number.isFinite(Number(chart.price)) ? Number(chart.price) : null
+  const marketCap = chart && Number.isFinite(Number(chart.marketCap)) ? Number(chart.marketCap) : null
   const formatUsd = (value) => value == null ? '—' : value >= 1000 ? `$${(value / 1000).toFixed(2)}K` : value >= 1 ? `$${value.toFixed(2)}` : `$${value.toExponential(3).replace('e-', 'e−')}`
   const shortAddress = TOKEN_ADDRESS ? `${TOKEN_ADDRESS.slice(0, 8)}…${TOKEN_ADDRESS.slice(-6)}` : 'NOT CONFIGURED'
 
   return <div className="app">
     <header>
       <div className="wordmark"><img className="brand-logo" src="/own-vault-logo.jpg" alt="OWN VAULT logo"/><b>OWN VAULT</b><small>/ PRIVATE YIELD SYSTEM</small></div>
-      <div className="network"><i/> ROBINHOOD CHAIN <span>4663</span></div>
+      <div className="network"><i/> ARC NETWORK <span>5042</span></div>
       <button className="dashboard-toggle" onClick={() => setDashboardOpen((open) => !open)}>{dashboardOpen ? 'Close dashboard' : 'Dashboard'} <em>↗</em></button><button className="connect" onClick={connectWallet}>{connected ? `${walletBalances?.address?.slice(0, 6)}…${walletBalances?.address?.slice(-4)}` : 'Connect wallet'} <em>↗</em></button>
     </header>
 
@@ -469,29 +438,30 @@ function App() {
           <div className="overview-card"><span className="overview-label">POSITION STATUS</span><strong className="status-value">{position?.hasPosition ? (position.unlockAt && position.unlockAt <= Math.floor(Date.now() / 1000) ? 'READY' : 'LOCKED') : 'EMPTY'}</strong><small>{position?.hasPosition ? 'Withdraw follows the unlock schedule' : 'Deposit an asset to create a position'}</small></div>
         </div>
         <div className="position-detail-card">
-          <div className="position-detail-top"><div className="asset-identity"><img src={asset === 'USDG' ? '/assets/usdg-logo-crop.png' : '/assets/eth-logo-crop.png'} alt={`${asset} logo`}/><div><span>ACTIVE POSITION</span><strong>{asset} vault</strong></div></div><span className="position-state">{position?.hasPosition ? '● ACTIVE' : '○ NO POSITION'}</span></div>
+          <div className="position-detail-top"><div className="asset-identity"><img src={asset === 'USDC' ? '/assets/usdc-logo.jpg' : '/assets/eth-logo-crop.png'} alt={`${asset} logo`}/><div><span>ACTIVE POSITION</span><strong>{asset} vault</strong></div></div><span className="position-state">{position?.hasPosition ? '● ACTIVE' : '○ NO POSITION'}</span></div>
           <div className="position-metrics"><div><span>DEPOSITED</span><b>{position?.depositedAt ? new Date(position.depositedAt * 1000).toLocaleDateString() : '—'}</b><small>{position?.depositedAt ? new Date(position.depositedAt * 1000).toLocaleTimeString() : 'Waiting for wallet'}</small></div><div><span>UNLOCKS</span><b>{position?.unlockAt ? new Date(position.unlockAt * 1000).toLocaleDateString() : '—'}</b><small>{position?.unlockAt ? new Date(position.unlockAt * 1000).toLocaleTimeString() : 'No active lock'}</small></div><div><span>COUNTDOWN</span><b className="countdown-value">{position?.hasPosition ? formatCountdown(position.unlockAt) : '—'}</b><small>{position?.hasPosition ? 'Contract timestamp' : '—'}</small></div></div>
           <div className="position-progress"><div className="progress-label"><span>POSITION LIFECYCLE</span><b>{position?.hasPosition ? (position.unlockAt <= Math.floor(Date.now() / 1000) ? 'WITHDRAW AVAILABLE' : 'EARNING') : 'NOT STARTED'}</b></div><div className="progress-track"><i style={{width: position?.hasPosition ? (position.unlockAt <= Math.floor(Date.now() / 1000) ? '100%' : '18%') : '0%'}}/></div></div>
           <div className="position-actions"><button className="secondary" disabled={!position?.hasPosition || txPending} onClick={claimReward}>Claim {asset} reward</button><button className="action" disabled={!position?.hasPosition || txPending || (position?.unlockAt > Math.floor(Date.now() / 1000))} onClick={withdraw}>Withdraw position ↗</button></div>
         </div>
-        <div className="dashboard-lower-grid"><div className="allocation dashboard-subcard"><div className="subcard-head"><div><span>VAULT RESERVES</span><h3>Allocation.</h3></div><i>LIVE</i></div><div className="reserve-row"><span><img src="/assets/usdg-logo-crop.png" alt="USDG"/> USDG</span><b>{vaultBalances.USDG ?? '—'}</b></div><div className="reserve-row"><span><img src="/assets/eth-logo-crop.png" alt="ETH"/> ETH</span><b>{vaultBalances.ETH ?? '—'}</b></div></div><div className="activity dashboard-subcard"><div className="subcard-head"><div><span>ON-CHAIN EVENTS</span><h3>Recent movement.</h3></div><i>LIVE</i></div><div className="activity-list">{movement.length ? movement.slice(0, 4).map((row) => <div className="movement-row" key={`${row.hash}-${row.type}`}><span><b>{row.type}</b><small>{row.asset} · block {row.block}</small></span><strong>{formatTokenBalance(row.amount, row.asset === 'USDG' ? (walletBalances?.usdgDecimals ?? 6) : 18)} {row.asset}</strong></div>) : <div className="empty-live">NO RECENT VAULT MOVEMENT</div>}</div></div></div>
+        <div className="dashboard-lower-grid"><div className="allocation dashboard-subcard"><div className="subcard-head"><div><span>VAULT RESERVES</span><h3>Allocation.</h3></div><i>LIVE</i></div><div className="reserve-row"><span><img src="/assets/usdc-logo.jpg" alt="USDC"/> USDC</span><b>{vaultBalances.USDC ?? '—'}</b></div></div><div className="activity dashboard-subcard"><div className="subcard-head"><div><span>ON-CHAIN EVENTS</span><h3>Recent movement.</h3></div><i>LIVE</i></div><div className="activity-list">{movement.length ? movement.slice(0, 4).map((row) => <div className="movement-row" key={`${row.hash}-${row.type}`}><span><b>{row.type}</b><small>{row.asset} · block {row.block}</small></span><strong>{formatTokenBalance(row.amount, row.asset === 'USDC' ? (walletBalances?.usdgDecimals ?? 6) : 18)} {row.asset}</strong></div>) : <div className="empty-live">NO RECENT VAULT MOVEMENT</div>}</div></div></div>
       </section>}
 
       <section className="intro">
         <div className="copy"><p className="kicker">OWN / CAPITAL INSTRUMENT 01</p><h1>A quieter way<br/>to <em>earn.</em></h1><p className="lead">Deposit digital assets into a disciplined vault. Keep a clear view of what is liquid, what is locked, and what your capital is earning.</p><div className="mini-status"><i/> {connected ? 'WALLET CONNECTED' : 'CONNECT A WALLET TO BEGIN'} <span>·</span> LIVE DATA ONLY</div></div>
-        <div className="chamber pons-chamber">
-          <div className="chamber-top"><span>PONS LIVE CHART / 5M</span><span>{now.toLocaleTimeString('en-GB')}</span></div>
-          <div className="pons-status"><i/> {chartState === 'live' ? 'LIVE · PONS DATA' : chartState === 'loading' ? 'CONNECTING TO PONS' : chartState === 'not_configured' ? 'CHART NOT CONFIGURED' : 'PONS DATA UNAVAILABLE'}</div>
-          <div className="chart-stats"><div><small>MCAP</small><strong>{formatUsd(marketCap)}</strong></div><div><small>PRICE</small><strong>{formatUsd(livePrice)}</strong></div></div>
-          <div className="candle-visual"><PriceChart points={points} backendCandles={chart?.candles} chartState={chartState}/></div>
-          <div className="ca-row"><span>CA <b>{shortAddress}</b></span><button disabled={!TOKEN_ADDRESS} onClick={copyTokenAddress}>COPY CA</button>{BUY_URL && <a href={BUY_URL} target="_blank" rel="noreferrer">BUY NOW ↗</a>}</div>
-          <div className="chamber-bottom"><span>LIVE PRICE / VOLUME</span><span><b>{chartState === 'live' ? 'CONNECTED' : 'UNAVAILABLE'}</b></span></div>
+        <div className="landing-card">
+          <div className="landing-card-top"><span>MARKET ACCESS</span><span><i/> ARC · 5042</span></div>
+          <div className="landing-mark"><img src="/assets/usdc-logo.jpg" alt="USDC"/></div>
+          <p className="landing-card-kicker">USDC / MARKET TOKEN</p>
+          <h2>Keep the address.<br/><em>Own the entry.</em></h2>
+          <p className="landing-card-copy">One clean route to the market. Copy the contract address or continue to buy.</p>
+          <div className="ca-box"><span>CONTRACT ADDRESS</span><b>{shortAddress}</b></div>
+          <div className="landing-actions"><button className="action" disabled={!TOKEN_ADDRESS} onClick={copyTokenAddress}>COPY CA <em>↗</em></button>{BUY_URL && <a className="secondary" href={BUY_URL} target="_blank" rel="noreferrer">BUY NOW <em>↗</em></a>}</div>
         </div>
       </section>
 
       <section id="position" className="capital-grid">
-        <div className="fund-panel"><div className="section-head"><div><small>01 / FUND THE VAULT</small><h2>Feed your position.</h2></div><span className="status">{connected ? 'READY' : 'LOCKED'}</span></div><p className="section-copy">Choose an asset and place capital into your own position. Rates are calculated from the selected lock duration.</p><label>ASSET</label><div className="asset-pills">{['USDG', 'ETH'].map((item) => <button className={asset === item ? 'selected' : ''} onClick={() => setAsset(item)} key={item}><img className="asset-logo" src={item === 'USDG' ? '/assets/usdg-logo-crop.png' : '/assets/eth-logo-crop.png'} alt={`${item} logo`}/><span><b>{item}</b><small>{item === 'USDG' ? 'Stablecoin' : 'Native asset'}</small></span></button>)}</div><div className="input-label"><label>AMOUNT</label><span>AVAILABLE {asset === 'USDG' ? (walletBalances?.usdg ?? '—') : (walletBalances?.eth ?? '—')} {asset}</span></div><div className="amount"><input value={amount} onChange={(event) => setAmount(event.target.value)}/><b>{asset}</b><button onClick={() => setAmount(asset === 'USDG' ? (walletBalances?.usdg ?? '') : (walletBalances?.eth ?? ''))}>MAX</button></div><button className="action" disabled={txPending || !connected} onClick={deposit}>{txPending ? 'Waiting for confirmation…' : connected ? `Deposit ${value.toLocaleString()} ${asset}` : 'Connect wallet to deposit'} <em>↗</em></button></div>
-        <div id="lock" className="yield-panel"><div className="section-head"><div><small>02 / PUT IT TO WORK</small><h2>Choose your horizon.</h2></div></div><p className="section-copy">Choose a lock horizon for your position.</p><div className="mode-list">{MODES.map((item) => <button className={mode === item.id ? 'selected' : ''} onClick={() => setMode(item.id)} key={item.id}><span><b>{item.name}</b><small>{item.detail}</small></span><strong>{item.apy[asset].toFixed(2)}%</strong></button>)}</div><div className="yield-readout"><span>ESTIMATED YEARLY YIELD</span><b>+{displayYearly.toLocaleString(undefined, { maximumFractionDigits: 6 })} {asset}</b><small>At {displayApy.toFixed(2)}% APY · {selected.detail}</small></div><div className="lock-meta"><span>UNLOCK DATE <b>{mode === '90d' ? '90 DAY LOCK' : mode === '7d' ? '7 DAY LOCK' : 'ANYTIME'}</b></span><span>RATE TYPE <b>FIXED</b></span></div><button className="secondary" onClick={() => notify(connected ? 'Select an amount and deposit to create your position' : 'Connect wallet to lock capital')}>Lock into yield <em>↗</em></button></div>
+        <div className="fund-panel"><div className="section-head"><div><small>01 / FUND THE VAULT</small><h2>Feed your position.</h2></div><span className="status">{connected ? 'READY' : 'LOCKED'}</span></div><p className="section-copy">Choose an asset and place capital into your own position. Rates are calculated from the selected lock duration.</p><label>ASSET</label><div className="asset-pills">{['USDC'].map((item) => <button className={asset === item ? 'selected' : ''} onClick={() => setAsset(item)} key={item}><img className="asset-logo" src={item === 'USDC' ? '/assets/usdc-logo.jpg' : '/assets/eth-logo-crop.png'} alt={`${item} logo`}/><span><b>{item}</b><small>{item === 'USDC' ? 'Stablecoin' : 'Native asset'}</small></span></button>)}</div><div className="input-label"><label>AMOUNT</label><span>AVAILABLE {asset === 'USDC' ? (walletBalances?.usdg ?? '—') : (walletBalances?.eth ?? '—')} {asset}</span></div><div className="amount"><input value={amount} onChange={(event) => setAmount(event.target.value)}/><b>{asset}</b><button onClick={() => setAmount(asset === 'USDC' ? (walletBalances?.usdg ?? '') : (walletBalances?.eth ?? ''))}>MAX</button></div><button className="action" disabled={txPending || !connected} onClick={deposit}>{txPending ? 'Waiting for confirmation…' : connected ? `Deposit ${value.toLocaleString()} ${asset}` : 'Connect wallet to deposit'} <em>↗</em></button></div>
+        <div id="lock" className="yield-panel"><div className="section-head"><div><small>02 / PUT IT TO WORK</small><h2>Choose your horizon.</h2></div></div><p className="section-copy">Choose a lock horizon for your position.</p><div className="mode-list">{MODES.map((item) => <button className={mode === item.id ? 'selected' : ''} onClick={() => setMode(item.id)} key={item.id}><span><b>{item.name}</b><small>{item.detail}</small></span><strong>{item.apy[asset] == null ? '—' : `${item.apy[asset].toFixed(2)}%`}</strong></button>)}</div><div className="yield-readout"><span>ESTIMATED YEARLY YIELD</span><b>+{displayYearly.toLocaleString(undefined, { maximumFractionDigits: 6 })} {asset}</b><small>At {displayApy == null ? '—' : `${displayApy.toFixed(2)}%`} APY · {selected.detail}</small></div><div className="lock-meta"><span>UNLOCK DATE <b>{mode === '90d' ? '90 DAY LOCK' : mode === '7d' ? '7 DAY LOCK' : 'ANYTIME'}</b></span><span>RATE TYPE <b>FIXED</b></span></div><button className="secondary" onClick={() => notify(connected ? 'Select an amount and deposit to create your position' : 'Connect wallet to lock capital')}>Lock into yield <em>↗</em></button></div>
       </section>
 
       <section id="rewards" className="telemetry"><div className="section-head"><div><small>03 / REWARD STREAM</small><h2>Watch your earnings.</h2></div><span className="telemetry-note">{connected ? 'POSITION REWARD' : 'CONNECT WALLET'}</span></div><div className="reward-panel"><div><span className="reward-label">LIVE ACCRUED REWARD</span><strong>{position?.pending ?? '—'} {asset}</strong><small>Stake {asset} to earn rewards in {asset}.</small></div><div className="reward-formula"><span>REWARD ASSET</span><b>{asset}</b><small>Read from the deployed vault position.</small><div className="reward-actions"><button className="secondary" disabled={txPending || !connected} onClick={claimReward}>Claim {asset}</button><button className="secondary" disabled={txPending || !connected} onClick={withdraw}>Withdraw {asset}</button></div></div></div></section>
